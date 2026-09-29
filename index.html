@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Курс Alipay vs ЦБ РФ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root {
+    --paper: #f6f3ec;
+    --ink: #1c1a17;
+    --line: #c9c2b2;
+    --jade: #2f5d4f;
+    --jade-deep: #1d3f36;
+    --rust: #a4472b;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 24px 16px 60px;
+  }
+
+  .wrap {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+
+  .masthead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 14px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .masthead h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 26px;
+    margin: 0;
+  }
+  .masthead span { font-size: 12px; color: var(--jade); }
+
+  /* Текущие значения */
+  .now-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .now-card {
+    border: 1px solid var(--line);
+    background: #fff;
+    padding: 18px;
+  }
+  .now-card .k { font-size: 12px; color: #6b6357; margin-bottom: 8px; }
+  .now-card .v {
+    font-family: 'Fraunces', serif;
+    font-size: 28px;
+  }
+  .now-card.bank { border-left: 3px solid var(--rust); }
+  .now-card.cbr { border-left: 3px solid var(--jade); }
+
+  .diff-strip {
+    border: 1px solid var(--line);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 16px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+  }
+  .diff-strip .k { font-size: 12px; opacity: 0.8; }
+  .diff-strip .v { font-family: 'Fraunces', serif; font-size: 24px; }
+  .diff-strip .v.up { color: #e8926f; }
+  .diff-strip .v.down { color: #7fc4ab; }
+
+  /* Форма ввода */
+  .panel {
+    border: 1px solid var(--line);
+    background: #fff;
+    padding: 20px;
+    margin-bottom: 32px;
+  }
+  .panel h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 17px;
+    margin: 0 0 14px 0;
+    font-weight: 600;
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row input {
+    flex: 1;
+    min-width: 120px;
+    border: none;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 15px;
+    padding: 8px 4px;
+  }
+  .row input:focus { outline: none; border-bottom-color: var(--rust); }
+  button.submit {
+    border: none;
+    background: var(--jade-deep);
+    color: var(--paper);
+    padding: 10px 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 12px;
+  }
+  button.submit:hover { background: var(--jade); }
+  button.submit:disabled { opacity: 0.5; cursor: default; }
+  .form-msg { font-size: 12px; margin-top: 10px; }
+  .form-msg.ok { color: var(--jade); }
+  .form-msg.err { color: var(--rust); }
+
+  /* Графики */
+  .chart-block {
+    border: 1px solid var(--line);
+    background: #fff;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+  .chart-block h3 {
+    font-family: 'Fraunces', serif;
+    font-size: 15px;
+    margin: 0 0 12px 0;
+    font-weight: 600;
+    color: #453f34;
+  }
+  .chart-wrap { position: relative; height: 220px; }
+
+  .empty-note {
+    font-size: 12px;
+    color: #94897a;
+    text-align: center;
+    padding: 30px 0;
+  }
+
+  .refresh-note {
+    font-size: 11px;
+    color: #94897a;
+    text-align: right;
+    margin-top: -10px;
+    margin-bottom: 20px;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="masthead">
+    <h1>Мостик курса</h1>
+    <span>Alipay · банк РФ · ЦБ</span>
+  </div>
+
+  <div class="now-grid">
+    <div class="now-card bank">
+      <div class="k">курс банка (Alipay)</div>
+      <div class="v" id="nowBank">—</div>
+    </div>
+    <div class="now-card cbr">
+      <div class="k">курс ЦБ РФ</div>
+      <div class="v" id="nowCbr">—</div>
+    </div>
+  </div>
+
+  <div class="diff-strip">
+    <span class="k">разница банк vs ЦБ</span>
+    <span class="v" id="nowDiff">—</span>
+  </div>
+
+  <div class="panel">
+    <h2>Ввести курс банка</h2>
+    <div class="row">
+      <input type="number" step="any" id="rateInput" placeholder="Курс, например 13.20">
+      <input type="password" id="passInput" placeholder="Пароль">
+    </div>
+    <button class="submit" id="submitBtn">Сохранить</button>
+    <div class="form-msg" id="formMsg"></div>
+  </div>
+
+  <div class="refresh-note" id="lastUpdate"></div>
+
+  <div class="chart-block">
+    <h3>Курс ЦБ РФ во времени</h3>
+    <div class="chart-wrap"><canvas id="chartCbr"></canvas></div>
+  </div>
+
+  <div class="chart-block">
+    <h3>Курс банка (Alipay) во времени</h3>
+    <div class="chart-wrap"><canvas id="chartBank"></canvas></div>
+  </div>
+
+  <div class="chart-block">
+    <h3>Разница в процентах (банк vs ЦБ)</h3>
+    <div class="chart-wrap"><canvas id="chartDiff"></canvas></div>
+  </div>
+
+</div>
+
+<script>
+  // ===== НАСТРОЙКИ =====
+  const SUPABASE_URL = "https://dvuzgjhgczmizlzqbiap.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_Mze4NaMBX_r6NhTrw0uolw_uDpUvC43";
+  const SITE_PASSWORD = "мойпароль123"; // поменяйте на свой
+
+  const headers = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": "Bearer " + SUPABASE_KEY,
+    "Content-Type": "application/json"
+  };
+
+  // ===== Получить курс ЦБ РФ =====
+  async function fetchCbrRate() {
+    try {
+      const res = await fetch("https://www.cbr-xml-daily.ru/daily_json.js");
+      const data = await res.json();
+      return data.Valute.CNY.Value / data.Valute.CNY.Nominal;
+    } catch (e) {
+      console.error("Не удалось получить курс ЦБ", e);
+      return null;
+    }
+  }
+
+  // ===== Сохранить новую запись =====
+  async function saveRate(bankRate, cbrRate) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rates`, {
+      method: "POST",
+      headers: { ...headers, "Prefer": "return=representation" },
+      body: JSON.stringify({ bank_rate: bankRate, cbr_rate: cbrRate })
+    });
+    if (!res.ok) throw new Error("Ошибка записи в базу");
+    return res.json();
+  }
+
+  // ===== Загрузить всю историю =====
+  async function loadHistory() {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rates?select=*&order=created_at.asc`, { headers });
+    if (!res.ok) throw new Error("Ошибка чтения базы");
+    return res.json();
+  }
+
+  // ===== Отправка формы =====
+  document.getElementById('submitBtn').addEventListener('click', async () => {
+    const rateInput = document.getElementById('rateInput');
+    const passInput = document.getElementById('passInput');
+    const msg = document.getElementById('formMsg');
+    const btn = document.getElementById('submitBtn');
+
+    const rate = parseFloat(rateInput.value.replace(',', '.'));
+    const pass = passInput.value;
+
+    if (pass !== SITE_PASSWORD) {
+      msg.textContent = "Неверный пароль";
+      msg.className = "form-msg err";
+      return;
+    }
+    if (isNaN(rate) || rate <= 0) {
+      msg.textContent = "Введите корректный курс";
+      msg.className = "form-msg err";
+      return;
+    }
+
+    btn.disabled = true;
+    msg.textContent = "Сохраняю...";
+    msg.className = "form-msg";
+
+    try {
+      const cbr = await fetchCbrRate();
+      await saveRate(rate, cbr);
+      msg.textContent = "Сохранено";
+      msg.className = "form-msg ok";
+      rateInput.value = "";
+      passInput.value = "";
+      await refreshAll();
+    } catch (e) {
+      msg.textContent = "Ошибка сохранения: " + e.message;
+      msg.className = "form-msg err";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ===== Графики =====
+  let chartCbr, chartBank, chartDiff;
+
+  function makeChart(ctx, label, color) {
+    return new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: label,
+          data: [],
+          borderColor: color,
+          backgroundColor: color + '22',
+          tension: 0.25,
+          pointRadius: 3,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { font: { family: 'IBM Plex Mono', size: 10 } } },
+          y: { ticks: { font: { family: 'IBM Plex Mono', size: 10 } } }
+        }
+      }
+    });
+  }
+
+  function fmt(n, digits = 3) {
+    return n === null || n === undefined ? '—' : Number(n).toLocaleString('ru-RU', { maximumFractionDigits: digits });
+  }
+
+  function formatDateLabel(iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' +
+           d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  async function refreshAll() {
+    let rows;
+    try {
+      rows = await loadHistory();
+    } catch (e) {
+      console.error(e);
+      return;
+    }
+
+    if (rows.length === 0) {
+      document.getElementById('lastUpdate').textContent = 'Данных пока нет — введите первый курс';
+      return;
+    }
+
+    const last = rows[rows.length - 1];
+    document.getElementById('nowBank').textContent = fmt(last.bank_rate) + ' ₽';
+    document.getElementById('nowCbr').textContent = fmt(last.cbr_rate) + ' ₽';
+
+    if (last.bank_rate && last.cbr_rate) {
+      const diff = ((last.bank_rate - last.cbr_rate) / last.cbr_rate) * 100;
+      const diffEl = document.getElementById('nowDiff');
+      const sign = diff > 0 ? '+' : '';
+      diffEl.textContent = sign + fmt(diff, 2) + ' %';
+      diffEl.className = 'v ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : '');
+    }
+
+    document.getElementById('lastUpdate').textContent =
+      'Обновлено: ' + formatDateLabel(last.created_at);
+
+    const labels = rows.map(r => formatDateLabel(r.created_at));
+    const cbrData = rows.map(r => r.cbr_rate);
+    const bankData = rows.map(r => r.bank_rate);
+    const diffData = rows.map(r =>
+      (r.bank_rate && r.cbr_rate) ? ((r.bank_rate - r.cbr_rate) / r.cbr_rate) * 100 : null
+    );
+
+    chartCbr.data.labels = labels;
+    chartCbr.data.datasets[0].data = cbrData;
+    chartCbr.update();
+
+    chartBank.data.labels = labels;
+    chartBank.data.datasets[0].data = bankData;
+    chartBank.update();
+
+    chartDiff.data.labels = labels;
+    chartDiff.data.datasets[0].data = diffData;
+    chartDiff.update();
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    chartCbr = makeChart(document.getElementById('chartCbr'), 'ЦБ РФ', '#2f5d4f');
+    chartBank = makeChart(document.getElementById('chartBank'), 'Банк', '#a4472b');
+    chartDiff = makeChart(document.getElementById('chartDiff'), '% разницы', '#1c1a17');
+    refreshAll();
+  });
+</script>
+
+</body>
+</html>
