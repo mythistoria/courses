@@ -288,13 +288,36 @@
   }
 
   async function saveRate(bankName, bankRate, cbrRate) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rates`, {
-      method: "POST",
-      headers: { ...headers, "Prefer": "return=representation" },
-      body: JSON.stringify({ bank_name: bankName, bank_rate: bankRate, cbr_rate: cbrRate })
-    });
-    if (!res.ok) throw new Error("Ошибка записи в базу");
-    return res.json();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayIso = todayStart.toISOString();
+
+    // Ищем, есть ли уже запись сегодня для этого банка
+    const checkRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/rates?select=id&bank_name=eq.${bankName}&created_at=gte.${todayIso}&order=created_at.desc&limit=1`,
+      { headers }
+    );
+    const existing = checkRes.ok ? await checkRes.json() : [];
+
+    if (existing.length > 0) {
+      // Обновляем существующую запись за сегодня
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rates?id=eq.${existing[0].id}`, {
+        method: "PATCH",
+        headers: { ...headers, "Prefer": "return=representation" },
+        body: JSON.stringify({ bank_rate: bankRate, cbr_rate: cbrRate })
+      });
+      if (!res.ok) throw new Error("Ошибка обновления записи");
+      return res.json();
+    } else {
+      // Создаём новую запись
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rates`, {
+        method: "POST",
+        headers: { ...headers, "Prefer": "return=representation" },
+        body: JSON.stringify({ bank_name: bankName, bank_rate: bankRate, cbr_rate: cbrRate })
+      });
+      if (!res.ok) throw new Error("Ошибка записи в базу");
+      return res.json();
+    }
   }
 
   async function loadHistory() {
@@ -355,20 +378,29 @@
     return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' +
            d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
   }
+  function dayKey(iso) {
+    const d = new Date(iso);
+    return d.toISOString().slice(0, 10); // YYYY-MM-DD
+  }
+  function formatDayLabel(dayStr) {
+    const d = new Date(dayStr + 'T00:00:00');
+    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+  }
 
   function buildChart() {
     const ctx = document.getElementById('chartMain');
 
-    const allDates = [...new Set(allRows.map(r => r.created_at))].sort();
-    const labels = allDates.map(formatDateLabel);
+    const allDays = [...new Set(allRows.map(r => dayKey(r.created_at)))].sort();
+    const labels = allDays.map(formatDayLabel);
 
     const datasets = [];
 
-    const cbrByDate = {};
-    allRows.forEach(r => { if (r.cbr_rate) cbrByDate[r.created_at] = r.cbr_rate; });
+    // Для каждого дня — последний известный курс ЦБ в этот день
+    const cbrByDay = {};
+    allRows.forEach(r => { if (r.cbr_rate) cbrByDay[dayKey(r.created_at)] = r.cbr_rate; });
     datasets.push({
       label: 'ЦБ РФ',
-      data: allDates.map(d => cbrByDate[d] ?? null),
+      data: allDays.map(d => cbrByDay[d] ?? null),
       borderColor: CBR_COLOR,
       backgroundColor: CBR_COLOR + '15',
       borderDash: [4, 3],
@@ -379,11 +411,11 @@
 
     const banksPresent = [...new Set(allRows.map(r => r.bank_name || 'alipay'))];
     banksPresent.forEach(bank => {
-      const byDate = {};
-      allRows.filter(r => (r.bank_name || 'alipay') === bank).forEach(r => { byDate[r.created_at] = r.bank_rate; });
+      const byDay = {};
+      allRows.filter(r => (r.bank_name || 'alipay') === bank).forEach(r => { byDay[dayKey(r.created_at)] = r.bank_rate; });
       datasets.push({
         label: BANK_LABELS[bank] || bank,
-        data: allDates.map(d => byDate[d] ?? null),
+        data: allDays.map(d => byDay[d] ?? null),
         borderColor: BANK_COLORS[bank] || '#c97b4a',
         backgroundColor: (BANK_COLORS[bank] || '#c97b4a') + '15',
         tension: 0.2,
