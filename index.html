@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Мостик.курса</title>
+<title>Курс пополнения Alipay через банки РФ</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&display=swap');
@@ -41,9 +41,11 @@
   .masthead h1 {
     font-family: 'Fraunces', serif;
     font-weight: 500;
-    font-size: 28px;
+    font-size: 21px;
     margin: 0;
     color: var(--text);
+    max-width: 620px;
+    line-height: 1.25;
   }
   .masthead .meta {
     font-size: 12px;
@@ -183,7 +185,7 @@
 <body>
 
 <div class="masthead">
-  <h1>Мостик.курса</h1>
+  <h1>Курс пополнения Alipay через банки РФ</h1>
   <span class="meta">CNY → RUB · <span id="lastUpdate">—</span></span>
 </div>
 
@@ -242,7 +244,13 @@
   // ===== НАСТРОЙКИ =====
   const SUPABASE_URL = "https://dvuzgjhgczmizlzqbiap.supabase.co";
   const SUPABASE_KEY = "sb_publishable_Mze4NaMBX_r6NhTrw0uolw_uDpUvC43";
-  const SITE_PASSWORD = "мойпароль123"; // поменяйте на свой
+  const SITE_PASSWORD_HASH = "dbbe339fa2b606d15c77ffd4ecef341dcc126d8b1a13a875d49adb5c741a15d3"; // хэш пароля "мойпароль123" — смените ниже
+
+  async function sha256(text) {
+    const enc = new TextEncoder().encode(text);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
 
   const BANK_LABELS = {
     tbank: "Т-Банк",
@@ -333,7 +341,7 @@
     const pass = passInput.value;
     const bank = bankSelect.value;
 
-    if (pass !== SITE_PASSWORD) {
+    if ((await sha256(pass)) !== SITE_PASSWORD_HASH) {
       msg.textContent = "Неверный пароль";
       msg.className = "form-msg err";
       return;
